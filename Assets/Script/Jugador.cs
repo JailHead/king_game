@@ -7,11 +7,6 @@ public class Jugador : MonoBehaviour
     [Header("Salto")]
     [SerializeField] private float fuerzaSalto = 43f;
 
-    [Header("Detección de Suelo")]
-    [SerializeField] private Transform puntoSuelo;
-    [SerializeField] private float radioDeteccion = 0.2f;
-    [SerializeField] private LayerMask capaSuelo;
-
     [Header("Sistema de Vidas")]
     [SerializeField] private int vidasMaximas = 3;
     [SerializeField] private float tiempoInvencibilidad = 1.5f;
@@ -36,6 +31,8 @@ public class Jugador : MonoBehaviour
     private int _vidasActuales;
     private bool _estaEnSuelo;
     private bool _esInvencible;
+    private bool _puedeSaltar = true;
+    private int _contadorSuelo = 0;
     private Color _colorOriginal;
 
     void Awake()
@@ -53,39 +50,59 @@ public class Jugador : MonoBehaviour
         ActualizarUIMonedas();
     }
 
+    private void ActualizarAnimacion()
+    {
+        if (_animator != null)
+        {
+            _animator.SetBool("Saltar", !_puedeSaltar);
+        }
+    }
+
     void Update()
     {
         if (gameManager.gameOver) return;
 
-        DetectarSuelo();
         ProcesarSalto();
-    }
-
-    private void DetectarSuelo()
-    {
-        _estaEnSuelo = Physics2D.OverlapCircle(puntoSuelo.position, radioDeteccion, capaSuelo);
-
-        if (_animator != null)
-        {
-            _animator.SetBool("Saltar", !_estaEnSuelo);
-        }
+        ActualizarAnimacion();
     }
 
     private void ProcesarSalto()
-    {        
-        if (Input.GetKeyDown(KeyCode.Space) && _estaEnSuelo)
+    {
+        if (Input.GetKeyDown(KeyCode.Space) && _puedeSaltar)
         {
             _rb.velocity = new Vector2(_rb.velocity.x, fuerzaSalto);
+            _puedeSaltar = false;
         }
     }
 
     void OnCollisionEnter2D(Collision2D collision)
     {
+        // Detectar suelo para permitir salto
+        if (collision.gameObject.CompareTag("Suelo"))
+        {
+            _contadorSuelo++;
+            _puedeSaltar = true;
+        }
+
+        // Detectar daño por obstáculos
         if (_esInvencible) return;
 
         if (collision.gameObject.CompareTag("Obstaculo"))
         {
             PerderVida();
+        }
+    }
+
+    void OnCollisionExit2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Suelo"))
+        {
+            _contadorSuelo--;
+            if (_contadorSuelo <= 0)
+            {
+                _contadorSuelo = 0;
+                _puedeSaltar = false;
+            }
         }
     }
 
@@ -154,15 +171,6 @@ public class Jugador : MonoBehaviour
         if (textoVidas != null)
         {
             textoVidas.text = "Vidas: " + _vidasActuales;
-        }
-    }
-
-    void OnDrawGizmosSelected()
-    {
-        if (puntoSuelo != null)
-        {
-            Gizmos.color = Color.red;
-            Gizmos.DrawWireSphere(puntoSuelo.position, radioDeteccion);
         }
     }
 

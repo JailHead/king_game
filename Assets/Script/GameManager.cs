@@ -43,6 +43,12 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            SalirJuego();
+            return;
+        }
+
         if (gameOver) return;
 
         ControlarVelocidad();
@@ -157,8 +163,7 @@ public class GameManager : MonoBehaviour
         if (_tiempoSiguienteMoneda <= 0f)
         {
             float randomX = Random.Range(12f, 20f);
-            // Altura ajustada: entre el suelo y altura alcanzable con salto
-            float randomY = Random.Range(-1f, 0.5f);
+            float randomY = Random.Range(-1.8f, -0.8f);
             GameObject nuevaMoneda = Instantiate(Moneda, new Vector2(randomX, randomY), Quaternion.identity);
             monedas.Add(nuevaMoneda);
 
@@ -185,5 +190,14 @@ public class GameManager : MonoBehaviour
 
             monedas[i].transform.position += _movimientoIzquierda * Time.deltaTime * velocidad;
         }
+    }
+
+    public void SalirJuego()
+    {
+        #if UNITY_EDITOR
+                UnityEditor.EditorApplication.isPlaying = false;
+        #else
+                Application.Quit();
+        #endif
     }
 }
