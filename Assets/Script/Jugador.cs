@@ -1,124 +1,187 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.Video;
 using TMPro;
-using UnityEngine.SceneManagement;
 
 public class Jugador : MonoBehaviour
 {
-    public float fuerzaSalto = 25;
+    [Header("Salto")]
+    [SerializeField] private float fuerzaSalto = 43f;
 
-    public GameManager gameManager;
+    [Header("Detecci√≥n de Suelo")]
+    [SerializeField] private Transform puntoSuelo;
+    [SerializeField] private float radioDeteccion = 0.2f;
+    [SerializeField] private LayerMask capaSuelo;
 
-    private Rigidbody2D rigidbody2D;
+    [Header("Sistema de Vidas")]
+    [SerializeField] private int vidasMaximas = 3;
+    [SerializeField] private float tiempoInvencibilidad = 1.5f;
 
-    public bool enSuelo = false;
+    [Header("Sistema de Monedas")]
+    [SerializeField] private TextMeshProUGUI textoMonedas;
 
-    public TextMeshProUGUI textoGameOver;
+    private int _monedasRecogidas = 0;
 
-    public int vidas = 3;
-    public int puntos = 0;
-    public Text textoVidas;
-    public Image pantallaNegra;
+    [Header("Referencias")]
+    [SerializeField] private GameManager gameManager;
+    [SerializeField] private TextMeshProUGUI textoVidas;
+    [SerializeField] private GameObject pantallaNegra;
+    [SerializeField] private TextMeshProUGUI textoGameOver;
 
+    // Componentes cacheados
+    private Rigidbody2D _rb;
+    private SpriteRenderer _spriteRenderer;
+    private Animator _animator;
 
-    private Animator animator;
+    // Estado
+    private int _vidasActuales;
+    private bool _estaEnSuelo;
+    private bool _esInvencible;
+    private Color _colorOriginal;
+
+    void Awake()
+    {
+        _rb = GetComponent<Rigidbody2D>();
+        _spriteRenderer = GetComponent<SpriteRenderer>();
+        _animator = GetComponent<Animator>();
+        _colorOriginal = _spriteRenderer.color;
+    }
+
     void Start()
     {
+        _vidasActuales = vidasMaximas;
+        ActualizarUIVidas();
+        ActualizarUIMonedas();
+    }
+
+    void Update()
+    {
+        if (gameManager.gameOver) return;
+
+        DetectarSuelo();
+        ProcesarSalto();
+    }
+
+    private void DetectarSuelo()
+    {
+        _estaEnSuelo = Physics2D.OverlapCircle(puntoSuelo.position, radioDeteccion, capaSuelo);
+
+        if (_animator != null)
+        {
+            _animator.SetBool("Saltar", !_estaEnSuelo);
+        }
+    }
+
+    private void ProcesarSalto()
+    {        
+        if (Input.GetKeyDown(KeyCode.Space) && _estaEnSuelo)
+        {
+            _rb.velocity = new Vector2(_rb.velocity.x, fuerzaSalto);
+        }
+    }
+
+    void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (_esInvencible) return;
+
+        if (collision.gameObject.CompareTag("Obstaculo"))
+        {
+            PerderVida();
+        }
+    }
+
+    void OnTriggerEnter2D(Collider2D other)
+    {
+        if (other.CompareTag("Serpiente"))
+        {
+            MuerteInstantanea();
+        }
+    }
+
+    private void PerderVida()
+    {
+        _vidasActuales--;
+        ActualizarUIVidas();
+
+        if (_vidasActuales <= 0)
+        {
+            MuerteInstantanea();
+        }
+        else
+        {
+            StartCoroutine(ActivarInvencibilidad());
+        }
+    }
+
+    private void MuerteInstantanea()
+    {
+        _vidasActuales = 0;
+        ActualizarUIVidas();
 
         if (pantallaNegra != null)
         {
-            pantallaNegra.gameObject.SetActive(false); // Asegurar que estÈ activo
+            pantallaNegra.SetActive(true);
         }
 
         if (textoGameOver != null)
         {
-            textoGameOver.enabled = false; // Deshabilitar al inicio
+            textoGameOver.text = "GAME OVER\n\nMonedas Recolectadas: " + _monedasRecogidas;
         }
 
-
-
-
-        
-
-        animator = GetComponent<Animator>();
-        rigidbody2D = GetComponent<Rigidbody2D>();
-
+        gameManager.ActivarGameOver();
     }
 
-    // Update is called once per frame
-    void Update()
+    private IEnumerator ActivarInvencibilidad()
     {
+        _esInvencible = true;
 
-        float mover = Input.GetAxis("Horizontal");
-        Vector2 velocidadActual = rigidbody2D.velocity;
-        rigidbody2D.velocity = new Vector2(mover * 5f, velocidadActual.y);
-
-
-
-
-        if (Input.GetKeyDown(KeyCode.Space) && enSuelo == true)
+        // Parpadeo visual
+        float tiempoTranscurrido = 0f;
+        while (tiempoTranscurrido < tiempoInvencibilidad)
         {
-            animator.SetBool("Saltar", true);
-            rigidbody2D.AddForce(new Vector2(0, (fuerzaSalto * 10)));
-            enSuelo = false;
+            _spriteRenderer.color = new Color(1f, 0f, 0f, 0.5f); // Rojo semi-transparente
+            yield return new WaitForSeconds(0.1f);
+            _spriteRenderer.color = _colorOriginal;
+            yield return new WaitForSeconds(0.1f);
+            tiempoTranscurrido += 0.2f;
         }
 
-        if (mover > 0)
+        _esInvencible = false;
+        _spriteRenderer.color = _colorOriginal;
+    }
+
+    private void ActualizarUIVidas()
+    {
+        if (textoVidas != null)
         {
-            transform.localScale = new Vector3(1, 1, 1); // Mira a la derecha
-        }
-        else if (mover < 0)
-        {
-            transform.localScale = new Vector3(-1, 1, 1); // Mira a la izquierda
+            textoVidas.text = "Vidas: " + _vidasActuales;
         }
     }
 
-    private void OnCollisionEnter2D(Collision2D collision)
+    void OnDrawGizmosSelected()
     {
-
-        if(collision.gameObject.tag == "Suelo")
+        if (puntoSuelo != null)
         {
-            animator.SetBool("Saltar", false);
-            enSuelo = true;
-        }
-
-        if(collision.gameObject.tag == "Obstaculo")
-        {
-            gameManager.gameOver = true;
-            perderVida();
-            Debug.Log("vidas: " + vidas);
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireSphere(puntoSuelo.position, radioDeteccion);
         }
     }
 
-    private void OnTriggerEnter2D(Collider2D collision)
+    public void RecogerMoneda(int valor)
     {
-        if (collision.gameObject.tag == "Serpiente")
-        {
-            puntos++;
-            Debug.Log("Puntos: " + puntos);
+        _monedasRecogidas += valor;
+        ActualizarUIMonedas();
+    }
 
-            // Destruir la serpiente
-            Destroy(collision.gameObject);
+    private void ActualizarUIMonedas()
+    {
+        if (textoMonedas != null)
+        {
+            textoMonedas.text = "Monedas: " + _monedasRecogidas;
         }
     }
 
-    void perderVida()
+    public int ObtenerMonedas()
     {
-        vidas--;
-
-        if (vidas == 0)
-        {
-            GameOver();
-        }
-    }
-
-
-    void GameOver()
-    {
-        pantallaNegra.gameObject.SetActive(true); // Asegurar que estÈ activo
-        textoGameOver.enabled = true; // Deshabilitar al inicio
+        return _monedasRecogidas;
     }
 }
